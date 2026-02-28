@@ -1,0 +1,64 @@
+name: Infra Telemetry Harvest
+
+on:
+  schedule:
+    # Run every 30 minutes (safe, non-abusive frequency)
+    # Uses UTC timezone
+    - cron: '*/30 * * * *'
+  
+  workflow_dispatch:
+    # Allow manual trigger for testing
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  harvest:
+    name: Harvest Reddit Telemetry
+    runs-on: ubuntu-latest
+    
+    # Use a timeout to prevent runaway processes
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Execute harvester
+        env:
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+        run: |
+          cd scripts
+          python harvester.py
+      
+      - name: Upload harvest artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: harvest-data-${{ github.run_id }}
+          path: scripts/data/harvest_*.json
+          retention-days: 30
+      
+      - name: Commit data to repository (optional)
+        run: |
+          git config --local user.email "sre-bot@company.internal"
+          git config --local user.name "SRE Telemetry Bot"
+          
+          # Only commit if there are new data files
+          if [ -d scripts/data ]; then
+            git add scripts/data/
+            git commit -m "chore: automated telemetry harvest $(date -u +%Y-%m-%d_%H:%M:%S)" || echo "No changes to commit"
+            git push || echo "Push skipped"
+          fi
+        continue-on-error: true

@@ -1,0 +1,6 @@
+# Infra Telemetry Harvester Dependencies
+# Pinned versions for reproducible builds
+
+praw==7.7.1
+urllib3>=2.0.0
+requests>=2.31.0
